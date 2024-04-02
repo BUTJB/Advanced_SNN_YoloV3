@@ -432,8 +432,9 @@ def download(url, dir='.', unzip=True, delete=True, curl=False, threads=1):
             if curl:
                 os.system(f"curl -L '{url}' -o '{f}' --retry 9 -C -")  # curl download, retry and resume on fail
             else:
-                torch.hub.download_url_to_file(url, f, progress=True)  # torch download
-        if unzip and f.suffix in ('.zip', '.gz'):
+                pass # 下载完了，不用下载了
+                # torch.hub.download_url_to_file(url, f, progress=True)  # torch download
+        if unzip := False and f.suffix in ('.zip', '.gz'):
             print(f'Unzipping {f}...')
             if f.suffix == '.zip':
                 ZipFile(f).extractall(path=dir)  # unzip

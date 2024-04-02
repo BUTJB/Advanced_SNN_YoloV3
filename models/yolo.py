@@ -87,7 +87,7 @@ class Detect(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolov3.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolov3.yaml', ch=3, nc=None, anchors=None, device=torch.device("cpu")):  # model, input channels, number of classes
         super().__init__()
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
@@ -96,7 +96,7 @@ class Model(nn.Module):
             self.yaml_file = Path(cfg).name
             with open(cfg, encoding='ascii', errors='ignore') as f:
                 self.yaml = yaml.safe_load(f)  # model dict
-
+        self.device = device
         # Define model
         ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
         if nc and nc != self.yaml['nc']:
@@ -125,10 +125,10 @@ class Model(nn.Module):
         self.info()
         LOGGER.info('')
 
-    def forward(self, x, augment=False, profile=False, visualize=False):
+    def forward(self, x, augment=False, profile=False, visualize=False, device=torch.device("cpu")):
         input = torch.zeros(time_window, x.size()[0], x.size()[1], x.size()[2], x.size()[3], device=x.device)
         for i in range(time_window):
-            input[i] = x
+            input[i] = x # 也是很简单的时间步上复制三份
 
         if augment:
             return self._forward_augment(x)  # augmented inference, None
@@ -148,7 +148,7 @@ class Model(nn.Module):
         y = self._clip_augmented(y)  # clip augmented tails
         return torch.cat(y, 1), None  # augmented inference, train
 
-    def _forward_once(self, x, profile=False, visualize=False):#执行这里【1,256,16,16】
+    def _forward_once(self, x, profile=False, visualize=False): #执行这里【1,256,16,16】
         y, dt = [], []  # outputs
         for m in self.model:
             if m.f != -1:  # if not from previous layer
@@ -275,16 +275,15 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 pass
 
         n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
-                 BottleneckCSP, C3, C3TR, C3SPP, C3Ghost,Conv_2,snn_resnet,
-                 BasicBlock,BasicBlock_1,BasicBlock_2,Conv_A,CSABlock,LIAFBlock,Conv_LIAF,Bottleneck_2,
-                 TCSABlock,BasicTCSA,ConcatBlock_ms,BasicBlock_ms,Conv_1,Concat_res2,HAMBlock,ConcatCSA_res2,BasicBlock_ms1]:
+        if m in [Conv,  MixConv2d, CrossConv,
+                 Conv_2,
+                 BasicBlock,BasicBlock_1,BasicBlock_2,Conv_A,ConcatBlock_ms,BasicBlock_ms,Conv_1,Concat_res2,]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
 
             args = [c1, c2, *args[1:]]
-            if m in [BottleneckCSP, C3, C3TR, C3Ghost]:
+            if m in []:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is nn.BatchNorm2d:
@@ -297,8 +296,6 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 args[1] = [list(range(args[1] * 2))] * len(f)
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
-        elif m is Expand:
-            c2 = ch[f] // args[0] ** 2
         else:
             c2 = ch[f]
 
